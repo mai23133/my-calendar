@@ -19,7 +19,7 @@ export default function Home() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session) {
-        setName(session.user?.email?.split('@')[0] || '')
+        setName(session.user.email.split('@')[0])
         fetchAvailability()
       }
     })
@@ -27,7 +27,7 @@ export default function Home() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) {
-        setName(session.user?.email?.split('@')[0] || '')
+        setName(session.user.email.split('@')[0])
         fetchAvailability()
       }
     })
