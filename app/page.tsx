@@ -24,7 +24,10 @@ export default function Home() {
     if (!name) return alert('กรุณาใส่ชื่อด้วยนะ!')
     
     // ปรับรูปแบบวันที่ให้สวยขึ้นตอนเซฟ
-    const selectedDate = date.toISOString().split('T')[0]
+    // ชดเชยโซนเวลาให้ตรงกับเครื่องที่ใช้งานก่อน แล้วค่อยตัดเอาแค่วันที่
+const offset = date.getTimezoneOffset() * 60000;
+const localDate = new Date(date.getTime() - offset);
+const selectedDate = localDate.toISOString().split('T')[0];
     
     await supabase.from('availability').insert([
       { name, date: selectedDate, status: 'ว่าง' }
