@@ -7,13 +7,14 @@ export default function Home() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
-  
-  const [name, setName] = useState('') 
+
+  const [name, setName] = useState('')
   const [list, setList] = useState<any[]>([])
   const [mounted, setMounted] = useState(false)
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDates, setSelectedDates] = useState<string[]>([])
   const [currentNote, setCurrentNote] = useState('')
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -49,20 +50,18 @@ export default function Home() {
   }, [list, session])
 
   const toggleDate = (dateStr: string) => {
-    if (selectedDates.includes(dateStr)) {
-      setSelectedDates(selectedDates.filter(d => d !== dateStr))
-    } else {
-      setSelectedDates([...selectedDates, dateStr])
-    }
+    setSelectedDates(prev =>
+      prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr]
+    )
   }
 
   const saveStatus = async () => {
     if (!session) return
+    setSaving(true)
     const userId = session.user.id
     const myExistingDates = getMyExistingDates()
     const datesToAdd = selectedDates.filter(d => !myExistingDates.includes(d))
     const datesToRemove = myExistingDates.filter(d => !selectedDates.includes(d))
-
     try {
       if (datesToRemove.length > 0) {
         await supabase.from('availability').delete().match({ user_id: userId }).in('date', datesToRemove)
@@ -73,136 +72,240 @@ export default function Home() {
           date: d,
           status: 'ว่าง',
           user_id: userId,
-          note: currentNote 
+          note: currentNote
         }))
         await supabase.from('availability').insert(insertData)
       }
-      alert('บันทึกสำเร็จ!')
       setCurrentNote('')
       fetchAvailability()
-    } catch (err) {
+    } catch {
       alert('เกิดข้อผิดพลาด')
+    } finally {
+      setSaving(false)
     }
   }
 
   const getLocalDateString = (d: Date) => {
-    const offset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - offset).toISOString().split('T')[0];
+    const offset = d.getTimezoneOffset() * 60000
+    return new Date(d.getTime() - offset).toISOString().split('T')[0]
   }
 
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate()
   const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).getDay()
-  const monthNames = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"]
+  const monthNames = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"]
+  const dayHeaders = ['อา','จ','อ','พ','พฤ','ศ','ส']
   const blanks = Array(firstDayOfMonth).fill(null)
   const days = Array.from({ length: daysInMonth }, (_, i) => new Date(currentMonth.getFullYear(), currentMonth.getMonth(), i + 1))
 
-  const groupedData = list.reduce((acc, item) => {
+  const groupedData = list.reduce<Record<string, { name: string; note: string }[]>>((acc, item) => {
     if (!acc[item.date]) acc[item.date] = []
     acc[item.date].push({ name: item.name, note: item.note })
     return acc
   }, {})
 
+  // ── shared styles ─────────────────────────────────────
+  const S = {
+    page: {
+      minHeight: '100vh',
+      backgroundColor: '#080c14' ,
+      fontFamily: "'DM Sans', 'Noto Sans Thai', sans-serif",
+      color: '#f0f4ff',
+      padding: '1.5rem 1rem',
+    } as React.CSSProperties,
+    surface: {
+      background: '#0d1420',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 16,
+    } as React.CSSProperties,
+    input: {
+      width: '100%',
+      padding: '0.75rem 1rem',
+      background: '#111827',
+      border: '1px solid rgba(255,255,255,0.1)',
+      borderRadius: 10,
+      color: '#f0f4ff',
+      fontFamily: "'DM Sans', 'Noto Sans Thai', sans-serif",
+      fontSize: '0.875rem',
+      outline: 'none',
+      boxSizing: 'border-box' as const,
+    },
+    btnPrimary: {
+      width: '100%',
+      padding: '0.8125rem',
+      background: '#6d4dff',
+      color: '#fff',
+      border: 'none',
+      borderRadius: 10,
+      fontFamily: "'DM Sans', sans-serif",
+      fontSize: '0.9rem',
+      fontWeight: 600,
+      cursor: 'pointer',
+      letterSpacing: '0.01em',
+    } as React.CSSProperties,
+  }
+
   if (!mounted) return null
+
+  // ── Login ──────────────────────────────────────────────
   if (!session) return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-        <div className="bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-700 text-white">
-          <h1 className="text-2xl font-bold mb-6 text-center">{isSignUp ? '📝 สมัครสมาชิก' : '🔐 เข้าสู่ระบบ'}</h1>
-          <form onSubmit={async (e: any) => {
-             e.preventDefault();
-             const fakeEmail = `${username.trim()}@calendar.app`;
-             if (isSignUp) {
-               const { error } = await supabase.auth.signUp({ email: fakeEmail, password });
-               if (error) alert(error.message); else alert('สำเร็จ!');
-             } else {
-               const { error } = await supabase.auth.signInWithPassword({ email: fakeEmail, password });
-               if (error) alert(error.message);
-             }
-          }} className="space-y-4">
-            <input type="text" placeholder="ชื่อผู้ใช้" className="w-full p-3 rounded-lg bg-gray-700 outline-none" value={username} onChange={(e) => setUsername(e.target.value)} required />
-            <input type="password" placeholder="รหัสผ่าน" className="w-full p-3 rounded-lg bg-gray-700 outline-none" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            <button type="submit" className="w-full bg-blue-600 py-3 rounded-lg font-bold">ยืนยัน</button>
-          </form>
-          <button onClick={() => setIsSignUp(!isSignUp)} className="text-blue-400 mt-4 w-full text-center hover:underline">
-            {isSignUp ? 'มีบัญชีแล้ว? ล็อกอิน' : 'ยังไม่มีบัญชี? สมัครใหม่'}
-          </button>
+    <div style={{ ...S.page, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+      <div style={{ position: 'fixed', top: '15%', left: '50%', transform: 'translateX(-50%)', width: 500, height: 500, background: 'radial-gradient(circle, rgba(109,77,255,0.13) 0%, transparent 70%)', pointerEvents: 'none', borderRadius: '50%', zIndex: 0 }} />
+
+      <div style={{ ...S.surface, padding: '2.5rem', width: '100%', maxWidth: 400, position: 'relative', overflow: 'hidden', zIndex: 1, boxShadow: '0 8px 48px rgba(0,0,0,0.5)' }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(90deg, transparent, rgba(109,77,255,0.8), transparent)' }} />
+
+        <div style={{ width: 44, height: 44, background: 'rgba(109,77,255,0.12)', border: '1px solid rgba(109,77,255,0.35)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', marginBottom: '1.25rem' }}>📅</div>
+
+        <div style={{ fontSize: '1.375rem', fontWeight: 700, color: '#f0f4ff', marginBottom: '0.25rem', letterSpacing: '-0.02em' }}>
+          {isSignUp ? 'สร้างบัญชีใหม่' : 'ยินดีต้อนรับกลับ'}
         </div>
+        <div style={{ color: '#8892a4', fontSize: '0.8125rem', marginBottom: '1.5rem' }}>
+          {isSignUp ? 'กรอกข้อมูลเพื่อเริ่มใช้งาน' : 'เข้าสู่ระบบเพื่อดูปฏิทินทีม'}
+        </div>
+        <div style={{ width: 32, height: 2, background: 'linear-gradient(90deg, #6d4dff, transparent)', borderRadius: 99, marginBottom: '1.5rem' }} />
+
+        <form onSubmit={async (e: any) => {
+          e.preventDefault()
+          const fakeEmail = `${username.trim()}@calendar.app`
+          if (isSignUp) {
+            const { error } = await supabase.auth.signUp({ email: fakeEmail, password })
+            if (error) alert(error.message); else alert('สมัครสำเร็จ!')
+          } else {
+            const { error } = await supabase.auth.signInWithPassword({ email: fakeEmail, password })
+            if (error) alert(error.message)
+          }
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <div>
+              <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4a5568', marginBottom: '0.375rem' }}>ชื่อผู้ใช้</div>
+              <input style={S.input} type="text" placeholder="กรอกชื่อผู้ใช้..." value={username} onChange={e => setUsername(e.target.value)} required
+                onFocus={e => { e.target.style.borderColor = '#6d4dff'; e.target.style.boxShadow = '0 0 0 3px rgba(109,77,255,0.15)' }}
+                onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = 'none' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#4a5568', marginBottom: '0.375rem' }}>รหัสผ่าน</div>
+              <input style={S.input} type="password" placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required
+                onFocus={e => { e.target.style.borderColor = '#6d4dff'; e.target.style.boxShadow = '0 0 0 3px rgba(109,77,255,0.15)' }}
+                onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = 'none' }} />
+            </div>
+          </div>
+          <button type="submit" style={S.btnPrimary}>
+            {isSignUp ? 'สร้างบัญชี →' : 'เข้าสู่ระบบ →'}
+          </button>
+        </form>
+
+        <button onClick={() => setIsSignUp(!isSignUp)} style={{ background: 'none', border: 'none', color: '#8b6dff', fontSize: '0.8125rem', cursor: 'pointer', padding: '0.875rem 0 0', width: '100%', textAlign: 'center', fontFamily: "'DM Sans', sans-serif" }}>
+          {isSignUp ? '← มีบัญชีแล้ว? ล็อกอิน' : 'ยังไม่มีบัญชี? สมัครใหม่ →'}
+        </button>
+      </div>
     </div>
   )
 
+  // ── Main App ───────────────────────────────────────────
+  const myUsername = session.user.email.split('@')[0]
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-4 sm:p-8 font-sans text-white">
-      <div className="max-w-6xl mx-auto w-full">
-        {/* Header + Note Input */}
-        <div className="bg-gray-800/80 p-5 rounded-xl border border-gray-700 mb-6 flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1 w-full">
-            <label className="text-[10px] sm:text-xs text-gray-400 mb-1 block uppercase tracking-wider">ระบุหมายเหตุ (เช่น ว่างกี่โมง/ไปไหน)</label>
-            <input 
-              type="text" 
-              placeholder="พิมพ์โน้ตตรงนี้ แล้วค่อยไปเลือกวัน..."
-              className="w-full p-3 rounded-lg bg-gray-900 border border-gray-600 focus:border-blue-500 outline-none text-sm transition-all"
-              value={currentNote}
-              onChange={(e) => setCurrentNote(e.target.value)}
-            />
+    <div style={{ ...S.page, backgroundImage: 'radial-gradient(ellipse 80% 35% at 50% 0%, rgba(109,77,255,0.09) 0%, transparent 55%), linear-gradient(rgba(255,255,255,0.011) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.011) 1px, transparent 1px)', backgroundSize: '100% 100%, 44px 44px, 44px 44px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+        {/* ── Topbar ── */}
+        <div style={{ ...S.surface, padding: '0.875rem 1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexShrink: 0 }}>
+            <div style={{ width: 36, height: 36, background: 'rgba(109,77,255,0.12)', border: '1px solid rgba(109,77,255,0.3)', borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>📅</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>Team Calendar</div>
+              <div style={{ fontSize: '0.75rem', color: '#8892a4' }}>สวัสดี, <strong style={{ color: '#c4b5fd' }}>{name}</strong></div>
+            </div>
           </div>
-          <div className="flex gap-2 w-full md:w-auto">
-            <button onClick={saveStatus} className="flex-1 bg-emerald-600 px-6 py-3 rounded-lg font-bold hover:bg-emerald-500 transition-all text-sm shadow-lg shadow-emerald-900/20">
-              💾 บันทึก
+
+          <input
+            type="text"
+            value={currentNote}
+            onChange={e => setCurrentNote(e.target.value)}
+            placeholder="📝  โน้ตสำหรับวันที่จะเลือก เช่น ว่างช่วงเช้า / อยู่ที่ออฟฟิศ..."
+            style={{ ...S.input, flex: 1, minWidth: 160 }}
+            onFocus={e => { e.target.style.borderColor = '#6d4dff'; e.target.style.boxShadow = '0 0 0 3px rgba(109,77,255,0.12)' }}
+            onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; e.target.style.boxShadow = 'none' }}
+          />
+
+          <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+            <button onClick={saveStatus} disabled={saving} style={{ padding: '0.6875rem 1.125rem', background: saving ? '#065f46' : '#10b981', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 600, fontSize: '0.8125rem', cursor: saving ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap', fontFamily: "'DM Sans', sans-serif" }}>
+              {saving ? '⏳...' : '💾 บันทึก'}
             </button>
-            <button onClick={() => supabase.auth.signOut()} className="text-red-400 px-4 py-3 border border-red-500/30 rounded-lg hover:bg-red-900/20 text-sm">ออก</button>
+            <button onClick={() => supabase.auth.signOut()} style={{ padding: '0.6875rem 0.875rem', background: 'transparent', color: '#f43f5e', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: "'DM Sans', sans-serif" }}>
+              ออก
+            </button>
           </div>
         </div>
 
-        {/* Calendar Section - ใช้วิธีที่ 2: Horizontal Scroll */}
-        <div className="bg-gray-800/50 p-3 sm:p-6 rounded-2xl border border-gray-700 shadow-2xl">
-          <div className="flex justify-between items-center mb-6">
-            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="text-xl p-2 hover:bg-gray-700 rounded-lg text-white">⬅️</button>
-            <h2 className="text-lg sm:text-2xl font-bold">{monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear() + 543}</h2>
-            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="text-xl p-2 hover:bg-gray-700 rounded-lg text-white">➡️</button>
+        {/* ── Calendar ── */}
+        <div style={{ ...S.surface, padding: '1.5rem', boxShadow: '0 8px 40px rgba(0,0,0,0.35)' }}>
+          {/* Month nav */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+              style={{ width: 36, height: 36, background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, color: '#8892a4', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>←</button>
+
+            <div style={{ fontSize: 'clamp(1rem, 3vw, 1.375rem)', fontWeight: 700, letterSpacing: '-0.02em' }}>
+              {monthNames[currentMonth.getMonth()]}&nbsp;
+              <span style={{ color: '#a78bfa' }}>{currentMonth.getFullYear() + 543}</span>
+            </div>
+
+            <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+              style={{ width: 36, height: 36, background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 9, color: '#8892a4', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>→</button>
           </div>
 
-          {/* Wrapper สำหรับเลื่อนข้างในมือถือ */}
-          <div className="overflow-x-auto pb-2 custom-scrollbar">
-            {/* กำหนด min-width เพื่อไม่ให้ปฏิทินแคบเกินไปในจอมือถือ */}
-            <div className="min-w-[700px]">
-              <div className="grid grid-cols-7 gap-2">
-                {['อา','จ','อ','พ','พฤ','ศ','ส'].map(d => <div key={d} className="text-center font-bold text-gray-500 pb-2 text-sm uppercase tracking-tighter">{d}</div>)}
-                
-                {blanks.map((_, i) => <div key={`b-${i}`} className="min-h-[110px] sm:min-h-[140px] bg-gray-900/20 rounded-xl border border-transparent"></div>)}
-                
+          {/* Grid */}
+          <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+            <div style={{ minWidth: 660 }}>
+              {/* Headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, marginBottom: 5 }}>
+                {dayHeaders.map(d => (
+                  <div key={d} style={{ textAlign: 'center', fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#374151', padding: '0.375rem 0' }}>{d}</div>
+                ))}
+              </div>
+
+              {/* Cells */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
+                {blanks.map((_, i) => (
+                  <div key={`b-${i}`} style={{ minHeight: 115, borderRadius: 9, border: '1px dashed rgba(255,255,255,0.03)', background: 'transparent' }} />
+                ))}
+
                 {days.map((day, i) => {
                   const dateStr = getLocalDateString(day)
                   const isSelected = selectedDates.includes(dateStr)
                   const items = groupedData[dateStr] || []
-                  
+
                   return (
-                    <div 
-                      key={i} 
-                      onClick={() => toggleDate(dateStr)}
-                      className={`min-h-[110px] sm:min-h-[140px] p-2 rounded-xl border transition-all cursor-pointer flex flex-col ${
-                        isSelected 
-                          ? 'bg-blue-600/20 border-blue-500 ring-2 ring-blue-500 shadow-lg shadow-blue-500/10' 
-                          : 'bg-gray-800 border-gray-700 hover:border-gray-500'
-                      }`}
-                    >
-                      <span className={`text-right font-bold text-xs sm:text-sm mb-1 ${isSelected ? 'text-blue-400' : 'text-gray-500'}`}>
+                    <div key={i} onClick={() => toggleDate(dateStr)} style={{
+                      minHeight: 115,
+                      padding: '0.4rem 0.45rem',
+                      borderRadius: 9,
+                      border: isSelected ? '1px solid #6d4dff' : '1px solid rgba(255,255,255,0.06)',
+                      background: isSelected ? 'rgba(109,77,255,0.08)' : '#0f1724',
+                      boxShadow: isSelected ? '0 0 0 1px #6d4dff, 0 4px 18px rgba(109,77,255,0.14)' : 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      transition: 'border-color 0.15s, background 0.15s',
+                    }}>
+                      {isSelected && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #6d4dff, #a78bfa)' }} />}
+
+                      <span style={{ textAlign: 'right', fontSize: '0.6875rem', fontWeight: 700, color: isSelected ? '#a78bfa' : '#374151', marginBottom: 4, lineHeight: 1 }}>
                         {day.getDate()}
                       </span>
-                      
-                      <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[80px] sm:max-h-[100px] custom-scrollbar pr-0.5">
-                        {items.map((item: any, idx: number) => (
-                          <div key={idx} className={`p-1 sm:p-1.5 rounded border flex flex-col shadow-sm ${
-                            item.name === session.user.email.split('@')[0] 
-                              ? 'bg-blue-500/30 border-blue-400/50' 
-                              : 'bg-gray-700/50 border-gray-600/50'
-                          }`}>
-                            <span className="text-[9px] sm:text-[11px] font-bold leading-tight truncate">{item.name}</span>
-                            {item.note && (
-                              <span className="text-[8px] sm:text-[9px] text-gray-400 italic break-words leading-tight mt-0.5 border-t border-gray-600/50 pt-0.5">
-                                💬 {item.note}
-                              </span>
-                            )}
-                          </div>
-                        ))}
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto', flex: 1, maxHeight: 80 }}>
+                        {items.map((item: any, idx: number) => {
+                          const isMe = item.name === myUsername
+                          return (
+                            <div key={idx} style={{ padding: '2px 5px', borderRadius: 4, background: isMe ? 'rgba(109,77,255,0.18)' : 'rgba(255,255,255,0.04)', border: `1px solid ${isMe ? 'rgba(109,77,255,0.38)' : 'rgba(255,255,255,0.07)'}` }}>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: isMe ? '#c4b5fd' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                              {item.note && <div style={{ fontSize: 8, color: '#6b7280', fontStyle: 'italic', marginTop: 1, wordBreak: 'break-word', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 1 }}>💬 {item.note}</div>}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )
@@ -210,9 +313,12 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <p className="text-[10px] text-gray-500 mt-4 text-center sm:hidden">↔️ เลื่อนตารางไปทางซ้าย-ขวาเพื่อดูวันอื่นๆ</p>
+
+          <div style={{ textAlign: 'center', fontSize: '0.6875rem', color: '#1f2937', marginTop: '0.875rem' }}>
+            ↔ เลื่อนซ้าย-ขวาเพื่อดูวันอื่น (มือถือ)
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   )
 }
