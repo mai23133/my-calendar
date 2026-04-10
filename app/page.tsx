@@ -103,6 +103,24 @@ export default function Home() {
     return acc
   }, {})
 
+  // --- Logic สำหรับจัดอันดับ "วันที่คนว่างเยอะสุด" ---
+  const sortedBestDates = Object.entries(groupedData)
+    .map(([dateStr, people]) => ({
+      date: dateStr,
+      count: people.length,
+      names: people.map(p => p.name).join(', ')
+    }))
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count; // เรียงตามจำนวนคนว่าง
+      return new Date(a.date).getTime() - new Date(b.date).getTime(); // ถ้าคนเท่ากัน เรียงตามวันที่มาก่อน
+    })
+
+  // ฟังก์ชันช่วยแปลงวันที่ให้สวยงาม
+  const formatDateThai = (dateString: string) => {
+    const d = new Date(dateString)
+    return `${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear() + 543}`
+  }
+
   // ── shared styles ─────────────────────────────────────
   const S = {
     page: {
@@ -202,7 +220,8 @@ export default function Home() {
   )
 
   // ── Main App ───────────────────────────────────────────
-  const myUsername = session.user.email.split('@')[0]
+  // ป้องกันเว็บพังด้วยการใส่ ? ก่อน .email
+  const myUsername = session.user?.email?.split('@')[0] || ''
 
   return (
     <div style={{ ...S.page, backgroundImage: 'radial-gradient(ellipse 80% 35% at 50% 0%, rgba(109,77,255,0.09) 0%, transparent 55%), linear-gradient(rgba(255,255,255,0.011) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.011) 1px, transparent 1px)', backgroundSize: '100% 100%, 44px 44px, 44px 44px' }}>
@@ -318,6 +337,51 @@ export default function Home() {
             ↔ เลื่อนซ้าย-ขวาเพื่อดูวันอื่น (มือถือ)
           </div>
         </div>
+
+        {/* ── Summary Table (ไอเดียที่ 1: วันที่คนว่างตรงกันเยอะสุด) ── */}
+        {sortedBestDates.length > 0 && (
+          <div style={{ ...S.surface, padding: '1.5rem', boxShadow: '0 8px 40px rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ fontSize: '1.25rem' }}>🏆</div>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0, color: '#f0f4ff', letterSpacing: '-0.01em' }}>สรุปวันที่คนว่างตรงกันเยอะที่สุด</h2>
+            </div>
+            
+            <div style={{ background: '#111827', borderRadius: 10, border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+              {/* Table Header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 2fr', padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)', fontSize: '0.75rem', fontWeight: 600, color: '#8892a4', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <div>วันที่</div>
+                <div>จำนวนคนว่าง</div>
+                <div>รายชื่อ</div>
+              </div>
+              
+              {/* Table Body (โชว์สูงสุด 5 อันดับแรก) */}
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {sortedBestDates.slice(0, 5).map((item, idx) => (
+                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 2fr', padding: '0.875rem 1rem', borderBottom: idx === Math.min(sortedBestDates.length, 5) - 1 ? 'none' : '1px solid rgba(255,255,255,0.03)', alignItems: 'center', transition: 'background 0.2s', cursor: 'default' }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.02)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#e2e8f0' }}>
+                      {formatDateThai(item.date)}
+                    </div>
+                    <div style={{ fontSize: '0.875rem', color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      🌟 {item.count} คน
+                    </div>
+                    <div style={{ fontSize: '0.8125rem', color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.names}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {sortedBestDates.length > 5 && (
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', textAlign: 'center', fontStyle: 'italic' }}>
+                แสดงผลเฉพาะ 5 อันดับแรกที่มีคนว่างมากที่สุด
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   )
